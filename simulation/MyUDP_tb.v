@@ -34,23 +34,56 @@ always #5 clk = ~clk;
 wire  phy_ref_clk ;
 wire  phy_reset_n ;
 wire  phy_rx_clk  = phy_ref_clk;
-wire [3:0] phy_rxd = 0;
-reg phy_rx_dv     = 0;
+reg [3:0] phy_rxd;
+reg phy_rx_dv    ;
 wire phy_rx_er     = 0;
 wire phy_tx_clk   = phy_ref_clk;
 wire [3:0] phy_txd;
 wire  phy_tx_en   ;
 
-initial begin
+reg [3:0] PCarpMem [0:144];
+integer i;
+initial begin 
+phy_rxd   = 4'h0;
 phy_rx_dv = 1'b0;
 @(posedge rstn);
 @(posedge phy_reset_n);
 #100;
-@(posedge phy_tx_clk);#1;
+$readmemh("ARP_rx.hex",PCarpMem);
+i=0;
+@(posedge phy_rx_clk);#1;
 phy_rx_dv = 1'b1;
-#100;
+   repeat (144) begin
+       phy_rxd   = PCarpMem[i];
+       i=i+1;
+       @(posedge phy_rx_clk);#1;
+   end
+phy_rx_dv = 1'b0;
+#1000;
+$readmemh("ARP_tx.hex",PCarpMem);
+i=0;
+@(posedge phy_rx_clk);#1;
+phy_rx_dv = 1'b1;
+   repeat (144) begin
+       phy_rxd   = PCarpMem[i];
+       i=i+1;
+       @(posedge phy_rx_clk);#1;
+   end
 phy_rx_dv = 1'b0;
 end
+
+
+
+//initial begin
+//phy_rx_dv = 1'b0;
+//@(posedge rstn);
+//@(posedge phy_reset_n);
+//#100;
+//@(posedge phy_tx_clk);#1;
+//phy_rx_dv = 1'b1;
+//#100;
+//phy_rx_dv = 1'b0;
+//end
 
 MyUDP_Top MyUDP_Top_inst(
 .clk    (clk),
