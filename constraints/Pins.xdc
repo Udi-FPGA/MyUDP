@@ -41,6 +41,8 @@ set_output_delay 0.000 [get_ports {phy_ref_clk phy_reset_n}]
 
 
 set_clock_groups -asynchronous -group [get_clocks clk] -group [get_clocks phy_tx_clk] -group [get_clocks phy_rx_clk] -group [get_clocks clk_25mhz_mmcm_out]
+set_clock_groups -asynchronous -group [get_clocks -of_objects [get_pins clk_mmcm_inst/CLKOUT0]] -group [get_clocks phy_tx_clk] -group [get_clocks phy_rx_clk] -group [get_clocks clk_25mhz_mmcm_out]
+
 
 set_property C_CLK_INPUT_FREQ_HZ 100000000 [get_debug_cores dbg_hub]
 set_property C_ENABLE_CLK_DIVIDER false [get_debug_cores dbg_hub]

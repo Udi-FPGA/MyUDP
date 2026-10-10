@@ -59,8 +59,8 @@ phy_rx_dv = 1'b1;
        @(posedge phy_rx_clk);#1;
    end
 phy_rx_dv = 1'b0;
-#1000;
-$readmemh("ARP_tx.hex",PCarpMem);
+#10000;
+$readmemh("UDP_rx.hex",PCarpMem);
 i=0;
 @(posedge phy_rx_clk);#1;
 phy_rx_dv = 1'b1;
@@ -70,20 +70,87 @@ phy_rx_dv = 1'b1;
        @(posedge phy_rx_clk);#1;
    end
 phy_rx_dv = 1'b0;
+#10000;
+phy_rxd   = 4'h0;
+phy_rx_dv = 1'b0;
+#100;
+$readmemh("ARP_rx.hex",PCarpMem);
+i=0;
+@(posedge phy_rx_clk);#1;
+phy_rx_dv = 1'b1;
+   repeat (144) begin
+       phy_rxd   = PCarpMem[i];
+       i=i+1;
+       @(posedge phy_rx_clk);#1;
+   end
+phy_rx_dv = 1'b0;
+#10000;
+$readmemh("UDP_rx.hex",PCarpMem);
+i=0;
+@(posedge phy_rx_clk);#1;
+phy_rx_dv = 1'b1;
+   repeat (144) begin
+       phy_rxd   = PCarpMem[i];
+       i=i+1;
+       @(posedge phy_rx_clk);#1;
+   end
+phy_rx_dv = 1'b0;
+#10000;
 end
 
 
+reg [3:0] chPCarpMem [0:144];
+reg [3:0] chphy_txd;
+reg       chphy_tx_en   ;
 
-//initial begin
-//phy_rx_dv = 1'b0;
-//@(posedge rstn);
-//@(posedge phy_reset_n);
-//#100;
-//@(posedge phy_tx_clk);#1;
-//phy_rx_dv = 1'b1;
-//#100;
-//phy_rx_dv = 1'b0;
-//end
+initial begin
+chphy_txd = 4'h0;
+chphy_tx_en = 1'b0;
+@(negedge phy_rx_dv);
+$readmemh("ARP_tx.hex",chPCarpMem);
+i=0;
+@(posedge phy_rx_clk);#1;
+@(posedge phy_rx_clk);#1;
+@(posedge phy_rx_clk);#1;
+chphy_tx_en = 1'b1;
+   repeat (144) begin
+       chphy_txd   = chPCarpMem[i];
+       i=i+1;
+       @(posedge phy_rx_clk);#1;
+   end
+chphy_tx_en = 1'b0;
+@(negedge phy_rx_dv);
+$readmemh("UDP_tx.hex",chPCarpMem);
+i=0;
+@(posedge phy_rx_clk);#1;
+@(posedge phy_rx_clk);#1;
+@(posedge phy_rx_clk);#1;
+chphy_tx_en = 1'b1;
+   repeat (144) begin
+       chphy_txd   = chPCarpMem[i];
+       i=i+1;
+       @(posedge phy_rx_clk);#1;
+   end
+chphy_tx_en = 1'b0;
+#10000;
+chphy_txd = 4'h0;
+chphy_tx_en = 1'b0;
+@(negedge phy_rx_dv);
+$readmemh("ARP_tx.hex",chPCarpMem);
+i=0;
+@(posedge phy_rx_clk);#1;
+@(posedge phy_rx_clk);#1;
+@(posedge phy_rx_clk);#1;
+chphy_tx_en = 1'b1;
+   repeat (144) begin
+       chphy_txd   = chPCarpMem[i];
+       i=i+1;
+       @(posedge phy_rx_clk);#1;
+   end
+chphy_tx_en = 1'b0;
+@(negedge phy_rx_dv);
+
+end
 
 MyUDP_Top MyUDP_Top_inst(
 .clk    (clk),
