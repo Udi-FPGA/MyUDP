@@ -3,7 +3,7 @@
 // Company: 
 // Engineer: 
 // 
-// Create Date: 10/02/2026 04:57:24 PM
+// Create Date: 10/24/2026 10:22:00 AM
 // Design Name: 
 // Module Name: MyUDP_tx
 // Project Name: 
@@ -21,80 +21,44 @@
 
 
 module MyUDP_tx(
-input clk  ,
-input rstn ,
+  input clk125,
+  input rstn  ,
+  
+  input [47:0] local_mac ,
+  input [31:0] local_ip  ,
+  input [15:0] local_port, 
+  
+  output [7:0] gmii_txd   ,  
+  output       gmii_txen  ,  
+  
+  input [47:0] desMAC ,             
+  input [47:0] srcMAC ,  
+  input [31:0] desIP  ,             
+  input [31:0] srcIP  ,  
+  input [15:0] desPORT,             
+  input [15:0] srcPORT,  
+  input [15:0] EthType,             
+  input [15:0] Length ,
+  
+  input SendARP,
+  input SendUDP
+   );
 
-input phy_tx_clk,
-output [3:0] phy_txd,
-output phy_tx_en,
+  parameter IDEL    = 4'b0000;    
+  parameter PREAMBL = 4'b0010;    
+  parameter ADDRESS = 4'b0011;    
+  parameter HEADER  = 4'b0100;    
+  parameter DATA    = 4'b0101;    
+  parameter CRC     = 4'b0110; 
 
-input StartARP,
-input StartUDP,
-input [47:0] local_mac ,
-input [31:0] local_ip  ,
-input [15:0] local_port,
-input [47:0] des_mac ,
-input [31:0] des_ip  ,
-input [15:0] des_port,
-
-input UDPDATAread,
-input [7:0] UDPDATA,
-input UDPDATAempty,
-input [9:0] UDPDATArdcount
-);
-reg [15:0] DataSize;
-wire [9 : 0] rd_data_count ;
-
-wire [15:0] IPSize = rd_data_count + 28;
-wire [15:0] UDPSize = rd_data_count + 8;
-wire [31:0] IPcheckSum1 = 16'h4500 + IPSize + 16'h0000 + 16'h4000 + 16'h4011;
-wire [31:0] IPcheckSum2 = local_ip[31:16] + local_ip[15:0] + des_ip[31:16] + des_ip[15:0];
-reg [15:0] IPcheckSum;
-//wire [15:0] UDPcheckSum = 16'h1073;
-wire [15:0] UDPcheckSum = 16'h0000;
-wire [15:0] UDPtype = 16'h0800;
-wire [15:0] UDPlength = 16'h0019;
-wire [63:0] ARPhead1  = 64'h0001080006040002;
-wire [63:0] ARPhead2  = {local_mac,local_ip[31:16]};
-wire [63:0] ARPhead3  = {local_ip[15:0],des_mac};
-wire [31:0] ARPhead4  = des_ip;
-wire [63:0] UDPhead1  = {16'h4500,IPSize,32'h00004000};
-wire [63:0] UDPhead2  = {16'h4011,IPcheckSum,local_ip};
-wire [63:0] UDPhead3  = {des_ip,local_port,des_port};
-wire [31:0] UDPhead4  = {UDPSize,UDPcheckSum};
-wire [63:0] Wdata1     = 64'h4650474120554450;
-wire [63:0] Wdata2     = 64'h2054657374203132;
-wire [63:0] Wdata3     = 64'h3300000000000000;
-reg [3:0] CRCcount;
-reg  MainOn;
-reg  UDPARPn;
-reg [15:0] MainCount;
-always @(posedge phy_tx_clk or negedge rstn)
-    if (!rstn) begin 
-         MainOn <= 1'b0;
-         MainCount <= 16'h0000;
-		 UDPARPn   <= 1'b0;
-              end
-     else if (MainOn) begin 
-               MainCount <= MainCount + 1;
-               if (CRCcount == 4'h8) MainOn <= 1'b0;
-                    end
-     else if (StartARP) begin 
-	             MainOn  <= 1'b1;
-	             UDPARPn <= 1'b0;
-				   end
-     else if (StartUDP) begin 
-	             MainOn  <= 1'b1;
-	             UDPARPn <= 1'b1;
-				   end
-     else begin
-        MainOn <= 1'b0;
-        MainCount <= 16'h0000;
-            end
-            
+wire [15:0] IPSize = Length + 28;
+wire [15:0] UDPSize = Length + 8;
+wire [31:0] IPcheckSum1 = 16'h4500 + IPSize + 16'h0000 + 16'h0000 + 16'h4011;
+wire [31:0] IPcheckSum2 = local_ip[31:16] + local_ip[15:0] + desIP[31:16] + desIP[15:0];
+reg  [15:0] IPcheckSum;
 reg [32:0] IP_CS2;
 reg [16:0] IP_CS1;
-always @(posedge phy_tx_clk or negedge rstn)
+always @(posedge clk125 or negedge rstn)
     if (!rstn) begin 
            IP_CS2     <= 32'h00000000;
            IP_CS1     <= 17'h00000;
@@ -105,125 +69,165 @@ always @(posedge phy_tx_clk or negedge rstn)
            IP_CS1     <= IP_CS2[15:0]+IP_CS2[31:16];
            IPcheckSum <= ~(IP_CS1[16]+IP_CS1[15:0]);
 		        end
-	 
-wire [15:0] PKTtype  = (UDPARPn) ? 16'h0800 : 16'h0806;
-wire [63:0] PKThead1 = (UDPARPn) ? UDPhead1 : ARPhead1;
-wire [63:0] PKThead2 = (UDPARPn) ? UDPhead2 : ARPhead2;
-wire [63:0] PKThead3 = (UDPARPn) ? UDPhead3 : ARPhead3;
-wire [31:0] PKThead4 = (UDPARPn) ? UDPhead4 : ARPhead4;
+wire [15:0] UDPcheckSum = 16'h0000;
+reg [15:0] ETHtype;
+always @(posedge clk125 or negedge rstn)
+    if (!rstn) ETHtype <= 16'h0000;
+     else if (SendARP) ETHtype <= 16'h0806;
+     else if (SendUDP) ETHtype <= 16'h0800;
+wire [15:0] UDPlength = 16'h0019;
+wire [63:0] ARPhead1  = 64'h0001080006040002;
+wire [63:0] ARPhead2  = {local_mac,local_ip[31:16]};
+wire [63:0] ARPhead3  = {local_ip[15:0],desMAC};
+wire [31:0] ARPhead4  = desIP;
+wire [63:0] UDPhead1  = {16'h4500,IPSize,32'h00000000};
+wire [63:0] UDPhead2  = {16'h4011,IPcheckSum,local_ip};
+wire [63:0] UDPhead3  = {desIP,local_port,desPORT};
+wire [31:0] UDPhead4  = {UDPSize,UDPcheckSum};
+  
+  reg [3:0] State;
+  reg [3:0] nextState;
+  
+  reg  [7:0] PREcount;   
+  reg  [7:0] ADDcount;   
+  reg  [7:0] HEAcount;   
+  reg [15:0] DATcount;   
+  reg  [7:0] CRCcount;
 
-//wire wr_en ;
-reg DATAon;
-reg [7:0] DATAcount;
-wire empty                 ;
-//wire rd_en = UDPDATAread;
-wire rd_en = (DATAon &&~ MainCount[0]) ? 1'b1 : 1'b0;
-wire [7 : 0] dout          ;
-wire full                  ;
-//wire [9 : 0] rd_data_count ;
-wire [9 : 0] wr_data_count ;
-always @(posedge clk or negedge rstn)
-    if (!rstn) DataSize <= 16'h0000;
-    else if (StartARP) DataSize <= 16'h0012;
-    else if (StartUDP) if (rd_data_count < 10'h012 )DataSize <= 16'h0012;
-                        else DataSize <= {6'h00,rd_data_count};
-
-//----------- Begin Cut here for INSTANTIATION Template ---// INST_TAG
-fifo_generator_0 fifo_generator_0_inst (
-  .rst(!rstn),                      // input wire rst
-  .wr_clk(clk),                // input wire wr_clk
-  .rd_clk(phy_tx_clk),                // input wire rd_clk
-  .din(UDPDATA),                      // input wire [7 : 0] din
-  .wr_en(UDPDATAread),                  // input wire wr_en
-  .rd_en(rd_en),                  // input wire rd_en
-  .dout(dout),                    // output wire [7 : 0] dout
-  .full(full),                    // output wire full
-  .empty(empty),                  // output wire empty
-  .rd_data_count(rd_data_count),  // output wire [9 : 0] rd_data_count
-  .wr_data_count(wr_data_count)  // output wire [9 : 0] wr_data_count
-);
-
-wire TXreset_crc = (MainCount[15:1] == 15'h0007) ? 1'b1 : 1'b0;
-wire TXupdate_crc = (MainCount[0]) ? 1'b1 : 1'b0;
-wire [31:0] TXcrc32;
-wire [31:0] RETXcrc32 = {TXcrc32[7:0],TXcrc32[15:8],TXcrc32[23:16],TXcrc32[31:24]};
-reg [63:0] OutShift;
-always @(posedge phy_tx_clk or negedge rstn)
-    if (!rstn) OutShift <= 64'h0000000000000000;
-     else if (MainCount == 16'h0000) OutShift <= 64'h55555555555555d5;
-     else if (MainCount == 16'h000f) OutShift[63:16] <= des_mac;
-     else if (MainCount == 16'h001b) OutShift[63:16] <= local_mac;
-     else if (MainCount == 16'h0027) OutShift[63:48] <= PKTtype;
-     else if (MainCount == 16'h002b) OutShift <= PKThead1;
-     else if (MainCount == 16'h003b) OutShift <= PKThead2;
-     else if (MainCount == 16'h004b) OutShift <= PKThead3;
-     else if (MainCount == 16'h005b) OutShift[63:32] <= PKThead4;
-     else if (MainCount[0] && DATAon) begin 
-                                    if ((rd_data_count == 10'h000)||(~UDPARPn))OutShift[63:56] <= 8'h00; 
-                                     else OutShift[63:56] <= dout;
-                                        end 
-     else if (DATAcount == DataSize+1) OutShift[63:32] <= RETXcrc32;
-     else if (MainCount[0]) OutShift <= {OutShift[55:0],8'h00};
-
- 
-crc32_d8 TXcrc32_d8_inst
-(
-  .clk       (phy_tx_clk)  ,
-  .reset_p   (!rstn)  ,
-             
-  .data      (OutShift[63:56])  ,
-  .crc_init  (TXreset_crc)  ,
-  .crc_en    (TXupdate_crc)  ,
-  .crc_result(TXcrc32)
-);
-always @(posedge phy_tx_clk or negedge rstn)
+ always @(posedge clk125 or negedge rstn)
     if (!rstn) begin 
-            DATAon    <= 1'b0;
-            DATAcount <= 8'h00;
-                end
-     else if (DATAon) begin 
-              if (MainCount[0]) begin 
-                    DATAcount <= DATAcount + 1;
-                    if (DATAcount == DataSize) DATAon <= 1'b0;     
-                         end
-                  end
-     else if (MainCount == 16'h0061)begin 
-              DATAcount <= 8'h00;
-              DATAon <= 1'b1;
-                 end
+          PREcount <= 8'h00;   
+          ADDcount <= 8'h00;   
+          HEAcount <= 8'h00;   
+          DATcount <= 16'h0000;   
+          CRCcount <= 8'h00;
+             end
      else begin 
-            DATAon    <= 1'b0;
-            DATAcount <= 8'h00;
-                end
-always @(posedge phy_tx_clk or negedge rstn)
-    if (!rstn) CRCcount = 4'hF;
-     else if (CRCcount != 4'hF) CRCcount <= CRCcount + 1;
-     else if (DATAon && MainCount[0] && (DATAcount == DataSize)) CRCcount = 4'h0; 
+          if (State==PREAMBL) PREcount <= PREcount + 1;
+           else PREcount <= 8'h00;   
+          if (State==ADDRESS) ADDcount <= ADDcount + 1;
+           else ADDcount <= 8'h00;   
+          if (State==HEADER) HEAcount <= HEAcount + 1;
+           else HEAcount <= 8'h00;   
+          if (State==DATA) DATcount <= DATcount + 1;
+           else DATcount <= 16'h0000;   
+          if (State==CRC) CRCcount <= CRCcount + 1;
+           else CRCcount <= 8'h00;      
+            end 
+
+  always @(*)
+       begin
+         case (State) 
+           IDEL : 
+               if (SendARP||SendUDP) nextState <= PREAMBL;
+                else  nextState <= IDEL;
+           PREAMBL:
+               if (PREcount == 8'h07) nextState <= ADDRESS;               
+                else  nextState <= PREAMBL;
+           ADDRESS:
+               if (ADDcount == 8'h0d) nextState <= HEADER;               
+                else  nextState <= ADDRESS;
+           HEADER:
+               if (HEAcount == 8'h1b) nextState <= DATA;               
+                else  nextState <= HEADER;
+           DATA:
+               if (DATcount == Length-1) nextState <= CRC;               
+                else  nextState <= DATA;
+           CRC:
+               if (CRCcount == 8'h05) nextState <= IDEL;               
+                else  nextState <= CRC;
+           default : nextState <= IDEL;
+         endcase
+       end
+ always @(posedge clk125 or negedge rstn)
+    if (!rstn) State <= IDEL;
+     else State <= nextState;
+
+  reg [63:0] ADDout;   
+  reg [63:0] HEAout;   
+  reg [31:0] CRCout;
+  reg  [7:0] CRCin;
+  reg        CRCen;
+  reg        PKTen;
+ always @(posedge clk125 or negedge rstn)
+    if (!rstn) begin
+          ADDout <= {desMAC,16'h0000};   
+          HEAout <= ARPhead1;   
+          CRCout <= 32'h00000000;
+          CRCin  <= 8'h00;
+          CRCen  <= 1'b0;
+          PKTen  <= 1'b0;
+          end 
+    else case (State) 
+	       IDEL    : begin
+                     ADDout <= {desMAC,16'h0000};   
+                     HEAout <= ARPhead1;   
+                     CRCin  <= 8'h00;
+                     CRCen  <= 1'b0;
+					   end
+           PREAMBL : begin
+                     if (PREcount == 8'h07) CRCin <= 8'hd5;
+                      else CRCin <= 8'h55;
+                     //if (PREcount == 8'h01) PKTen  <= 1'b1;
+                     PKTen  <= 1'b1;
+					   end
+           ADDRESS : begin 
+                     if (ADDcount == 8'h05) ADDout <= {local_mac,ETHtype};           
+                      else ADDout <= {ADDout[55:0],8'h00};    
+                     CRCin <= ADDout[63:56];
+                     CRCen  <= 1'b1;
+                       end       
+           HEADER  : begin
+                     if (HEAcount == 8'h07) HEAout <= ARPhead2;  
+                      else if (HEAcount == 8'h0f) HEAout <= ARPhead3;           
+                      else if (HEAcount == 8'h17) HEAout <= {ARPhead4,32'h00000000};
+                      else HEAout <= {HEAout[55:0],8'h00};  
+                     CRCin <= HEAout[63:56];
+                       end       
+           DATA    : CRCin <= 8'h00;      
+           CRC     : begin
+                     if (CRCcount == 8'h01) begin
+		                 CRCout <= {CRCcalc[23:16],CRCcalc[31:24],8'h00,8'h00};   
+                         CRCin <= CRCcalc[15:8];
+						      end
+		              else begin
+		                 CRCout <= {CRCout[23:0],8'h00};
+                         CRCin <= CRCout[31:24];
+                            end       
+                     if (CRCcount == 8'h04) PKTen  <= 1'b0;
+                       end       
+           default : CRCin <= 8'h00;
+         endcase   
+
+wire [31:0] CRCcalc;
+wire rstCRC = ((State == IDEL)||(State == PREAMBL)) ? 1'b1 : 1'b0;
+MyCRC MyCRC_inst(
+  .clk       (clk125)   ,
+  .rstn      (rstn)     ,
+             
+  .data      (CRCin) ,
+  .crc_init  (!CRCen)   ,
+  .crc_en    (CRCen),
+  .crc_result(CRCcalc)
+    );
+	 
+reg [7:0] OutTx  ;  
+reg       OutTxen;  
+always @(posedge clk125 or negedge rstn)
+   if (!rstn) begin
+          OutTx   <= 8'h00;  
+          OutTxen <= 1'b0;  
+		        end
+    else  begin
+          if (CRCcount == 8'h01) OutTx   <= CRCcalc[7:0];  
+		   else OutTx  <= CRCin;
+          OutTxen <= PKTen;  
+		        end
+		        
+				
+        
+
+assign gmii_txd  = OutTx  ;  
+assign gmii_txen = OutTxen;  
     
-//wire [7:0] data = 8'hd5;
-reg [3:0] OutTx;
-always @(posedge phy_tx_clk or negedge rstn)
-    if (!rstn) OutTx <= 4'h0;
-     else if (DATAcount == DataSize+1) OutTx <= TXcrc32[7:0];
-     else if (MainCount[0]) OutTx <= OutShift[63:60];
-     else OutTx <= OutShift[59:56];
-
-assign phy_txd = OutTx;
-assign phy_tx_en = MainOn;
-
-//----------- Begin Cut here for INSTANTIATION Template ---// INST_TAG
-ila_3 ila_3_inst (
-	.clk(phy_tx_clk), // input wire clk
-
-	.probe0(StartARP), // input wire [0:0]  probe0  
-	.probe1(StartUDP), // input wire [0:0]  probe1 
-	.probe2(MainOn   ), // input wire [0:0]  probe2 
-	.probe3(MainCount), // input wire [15:0]  probe3 
-	.probe4(UDPARPn  ), // input wire [0:0]  probe4 
-	.probe5(DATAon   ), // input wire [0:0]  probe5 
-	.probe6(DATAcount), // // input wire [7:0]  probe6
-	.probe7(rd_data_count), // input wire [9:0]  probe7 
-	.probe8(DataSize) // input wire [15:0]  probe8
-);
-         
 endmodule

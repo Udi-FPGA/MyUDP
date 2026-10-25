@@ -3,7 +3,7 @@
 // Company: 
 // Engineer: 
 // 
-// Create Date: 10/02/2026 05:21:54 PM
+// Create Date: 10/24/2026 10:42:38 AM
 // Design Name: 
 // Module Name: MyUDP_tb
 // Project Name: 
@@ -21,151 +21,115 @@
 
 
 module MyUDP_tb();
-reg clk ;
-reg rstn;
+reg clk50;
+reg clk125 ;
+reg rstn  ;
 initial begin 
-clk = 1'b0;
-rstn = 1'b0;
+clk50 = 1'b1;
+clk125  = 1'b0;
+rstn   = 1'b0;
 #100;
-rstn = 1'b1;
-end
-always #5 clk = ~clk;
+rstn   = 1'b1;
+end 
 
-wire  phy_ref_clk ;
-wire  phy_reset_n ;
-wire  phy_rx_clk  = phy_ref_clk;
-reg [3:0] phy_rxd;
-reg phy_rx_dv    ;
-wire phy_rx_er     = 0;
-wire phy_tx_clk   = phy_ref_clk;
-wire [3:0] phy_txd;
-wire  phy_tx_en   ;
+always #10 clk50 = ~clk50  ;
+always #4  clk125 = ~clk125;
 
-reg [3:0] PCarpMem [0:144];
+reg [3:0] Mem [0:144];
+
+reg       dv;
+reg [3:0] data;
 integer i;
 initial begin 
-phy_rxd   = 4'h0;
-phy_rx_dv = 1'b0;
+dv   = 1'b0;
+data = 4'h0;
 @(posedge rstn);
-@(posedge phy_reset_n);
-#100;
-$readmemh("ARP_rx.hex",PCarpMem);
+#1000;
+
+
+$readmemh("ARP_rx.hex",Mem);
 i=0;
-@(posedge phy_rx_clk);#1;
-phy_rx_dv = 1'b1;
-   repeat (144) begin
-       phy_rxd   = PCarpMem[i];
-       i=i+1;
-       @(posedge phy_rx_clk);#1;
-   end
-phy_rx_dv = 1'b0;
-#10000;
-$readmemh("UDP_rx.hex",PCarpMem);
+@(posedge clk125);
+dv   = 1'b1;
+repeat (72) begin 
+data = Mem[2*i];
+@(negedge clk125);
+data = Mem[2*i+1];
+i=i+1;
+@(posedge clk125);
+end
+dv   = 1'b0;
+#80;
+@(posedge clk125);
+@(posedge clk125);
+//@(posedge clk125);
+
+//force MyUDP_top_inst.MyUDP_rx_inst.gmii_rxd  = 0;
+//force MyUDP_top_inst.MyUDP_rx_inst.gmii_rxdv
+force MyUDP_top_inst.MyUDP_rx_inst.State = 0;
+$readmemh("ARP_tx.hex",Mem);
 i=0;
-@(posedge phy_rx_clk);#1;
-phy_rx_dv = 1'b1;
-   repeat (144) begin
-       phy_rxd   = PCarpMem[i];
-       i=i+1;
-       @(posedge phy_rx_clk);#1;
-   end
-phy_rx_dv = 1'b0;
-#10000;
-phy_rxd   = 4'h0;
-phy_rx_dv = 1'b0;
-#100;
-$readmemh("ARP_rx.hex",PCarpMem);
+@(posedge clk125);
+dv   = 1'b1;
+repeat (72) begin 
+data = Mem[2*i];
+@(negedge clk125);
+data = Mem[2*i+1];
+i=i+1;
+@(posedge clk125);
+end
+dv   = 1'b0;
+#1000;
+
+
+$readmemh("UDP_rx.hex",Mem);
 i=0;
-@(posedge phy_rx_clk);#1;
-phy_rx_dv = 1'b1;
-   repeat (144) begin
-       phy_rxd   = PCarpMem[i];
-       i=i+1;
-       @(posedge phy_rx_clk);#1;
-   end
-phy_rx_dv = 1'b0;
-#10000;
-$readmemh("UDP_rx.hex",PCarpMem);
+@(posedge clk125);
+dv   = 1'b1;
+repeat (72) begin 
+data = Mem[2*i];
+@(negedge clk125);
+data = Mem[2*i+1];
+i=i+1;
+@(posedge clk125);
+end
+dv   = 1'b0;
+#1000;
+
+$readmemh("UDP_tx.hex",Mem);
 i=0;
-@(posedge phy_rx_clk);#1;
-phy_rx_dv = 1'b1;
-   repeat (144) begin
-       phy_rxd   = PCarpMem[i];
-       i=i+1;
-       @(posedge phy_rx_clk);#1;
-   end
-phy_rx_dv = 1'b0;
-#10000;
+@(posedge clk125);
+dv   = 1'b1;
+repeat (72) begin 
+data = Mem[2*i];
+@(negedge clk125);
+data = Mem[2*i+1];
+i=i+1;
+@(posedge clk125);
+end
+dv   = 1'b0;
+#1000;
 end
 
+MyUDP_top MyUDP_top_inst(
+.Clk  (clk50),
+.Rst_n(rstn),
+.key_in(2'b11),
+.Led   (),
 
-reg [3:0] chPCarpMem [0:144];
-reg [3:0] chphy_txd;
-reg       chphy_tx_en   ;
-
-initial begin
-chphy_txd = 4'h0;
-chphy_tx_en = 1'b0;
-@(negedge phy_rx_dv);
-$readmemh("ARP_tx.hex",chPCarpMem);
-i=0;
-@(posedge phy_rx_clk);#1;
-@(posedge phy_rx_clk);#1;
-@(posedge phy_rx_clk);#1;
-chphy_tx_en = 1'b1;
-   repeat (144) begin
-       chphy_txd   = chPCarpMem[i];
-       i=i+1;
-       @(posedge phy_rx_clk);#1;
-   end
-chphy_tx_en = 1'b0;
-@(negedge phy_rx_dv);
-$readmemh("UDP_tx.hex",chPCarpMem);
-i=0;
-@(posedge phy_rx_clk);#1;
-@(posedge phy_rx_clk);#1;
-@(posedge phy_rx_clk);#1;
-chphy_tx_en = 1'b1;
-   repeat (144) begin
-       chphy_txd   = chPCarpMem[i];
-       i=i+1;
-       @(posedge phy_rx_clk);#1;
-   end
-chphy_tx_en = 1'b0;
-#10000;
-chphy_txd = 4'h0;
-chphy_tx_en = 1'b0;
-@(negedge phy_rx_dv);
-$readmemh("ARP_tx.hex",chPCarpMem);
-i=0;
-@(posedge phy_rx_clk);#1;
-@(posedge phy_rx_clk);#1;
-@(posedge phy_rx_clk);#1;
-chphy_tx_en = 1'b1;
-   repeat (144) begin
-       chphy_txd   = chPCarpMem[i];
-       i=i+1;
-       @(posedge phy_rx_clk);#1;
-   end
-chphy_tx_en = 1'b0;
-@(negedge phy_rx_dv);
-
-end
-
-MyUDP_Top MyUDP_Top_inst(
-.clk    (clk),
-.reset_n(rstn),
-.btn      (0),
-.sw       (0),
-.phy_ref_clk(phy_ref_clk),
-.phy_reset_n(phy_reset_n),
-.phy_rx_clk (phy_rx_clk ),
-.phy_rxd    (phy_rxd    ),
-.phy_rx_dv  (phy_rx_dv  ),
-.phy_rx_er  (phy_rx_er  ),
-.phy_tx_clk (phy_tx_clk ),
-.phy_txd    (phy_txd    ),
-.phy_tx_en  (phy_tx_en  )
+//eth_rx
+.rgmii_rx_clk_i(clk125),
+.rgmii_rxd     (data),
+.rgmii_rxdv    (dv),
+//eth_tx      
+.rgmii_tx_clk  (),
+.rgmii_txd     (),
+.rgmii_txen    (),
+              
+.eth_rstn      (),  
+.eth_mdc       (),
+.eth_mdio      ()
     );
+
 
 endmodule
