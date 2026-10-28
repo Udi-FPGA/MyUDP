@@ -1,5 +1,9 @@
 work/MyUDP_Proj
 IP/clk_wiz_0/*
 !IP/clk_wiz_0/clk_wiz_0.xci
+IP/fifo_generator_0/*
+!IP/fifo_generator_0/fifo_generator_0.xci
 IP/ila_0/*
 !IP/ila_0/ila_0.xci
+IP/ila_1/*
+!IP/ila_1/ila_1.xci

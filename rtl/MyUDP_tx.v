@@ -40,6 +40,10 @@ module MyUDP_tx(
   input [15:0] EthType,             
   input [15:0] Length ,
   
+  output reg PayLoadRd,
+  input  PayLoadEmpty, 
+  input [7:0] PayLoad, 
+  
   input SendARP,
   input SendUDP
    );
@@ -53,9 +57,33 @@ module MyUDP_tx(
 
 wire [15:0] IPSize = Length + 28;
 wire [15:0] UDPSize = Length + 8;
-wire [31:0] IPcheckSum1 = 16'h4500 + IPSize + 16'h0000 + 16'h0000 + 16'h4011;
-wire [31:0] IPcheckSum2 = local_ip[31:16] + local_ip[15:0] + desIP[31:16] + desIP[15:0];
+reg [15:0] ETHtype;
+always @(posedge clk125 or negedge rstn)
+    if (!rstn) ETHtype <= 16'h0000;
+     else if (SendARP) ETHtype <= 16'h0806;
+     else if (SendUDP) ETHtype <= 16'h0800;
+reg  [15:0] Reg_Length;
+always @(posedge clk125 or negedge rstn)
+    if (!rstn) Reg_Length <= 16'h0000;
+     else if (ETHtype == 16'h0806) Reg_Length <= 16'h0012;
+     else if (Length <= 16'h0012) Reg_Length <= 16'h0012;
+     else Reg_Length <= Length;
+
+wire [63:0] ARPhead1  = 64'h0001080006040002;
+wire [63:0] ARPhead2  = {local_mac,local_ip[31:16]};
+wire [63:0] ARPhead3  = {local_ip[15:0],desMAC};
+wire [31:0] ARPhead4  = desIP;
+
 reg  [15:0] IPcheckSum;
+wire [15:0] UDPcheckSum = 16'h0000;
+//wire [15:0] UDPcheckSum = 16'h1073;
+
+wire [63:0] UDPhead1  = {16'h4500,IPSize,32'h00004000};
+wire [63:0] UDPhead2  = {16'h4011,IPcheckSum,local_ip};
+wire [63:0] UDPhead3  = {desIP,local_port,desPORT};
+wire [31:0] UDPhead4  = {UDPSize,UDPcheckSum};
+wire [31:0] IPcheckSum1 = UDPhead1[63:48] + UDPhead1[47:32] + UDPhead1[31:16] + UDPhead1[15:0] + UDPhead2[63:48];
+wire [31:0] IPcheckSum2 = local_ip[31:16] + local_ip[15:0] + desIP[31:16] + desIP[15:0];
 reg [32:0] IP_CS2;
 reg [16:0] IP_CS1;
 always @(posedge clk125 or negedge rstn)
@@ -69,21 +97,10 @@ always @(posedge clk125 or negedge rstn)
            IP_CS1     <= IP_CS2[15:0]+IP_CS2[31:16];
            IPcheckSum <= ~(IP_CS1[16]+IP_CS1[15:0]);
 		        end
-wire [15:0] UDPcheckSum = 16'h0000;
-reg [15:0] ETHtype;
-always @(posedge clk125 or negedge rstn)
-    if (!rstn) ETHtype <= 16'h0000;
-     else if (SendARP) ETHtype <= 16'h0806;
-     else if (SendUDP) ETHtype <= 16'h0800;
-wire [15:0] UDPlength = 16'h0019;
-wire [63:0] ARPhead1  = 64'h0001080006040002;
-wire [63:0] ARPhead2  = {local_mac,local_ip[31:16]};
-wire [63:0] ARPhead3  = {local_ip[15:0],desMAC};
-wire [31:0] ARPhead4  = desIP;
-wire [63:0] UDPhead1  = {16'h4500,IPSize,32'h00000000};
-wire [63:0] UDPhead2  = {16'h4011,IPcheckSum,local_ip};
-wire [63:0] UDPhead3  = {desIP,local_port,desPORT};
-wire [31:0] UDPhead4  = {UDPSize,UDPcheckSum};
+wire [63:0] head1  = (ETHtype == 16'h0806) ? ARPhead1 : UDPhead1;
+wire [63:0] head2  = (ETHtype == 16'h0806) ? ARPhead2 : UDPhead2;
+wire [63:0] head3  = (ETHtype == 16'h0806) ? ARPhead3 : UDPhead3;
+wire [31:0] head4  = (ETHtype == 16'h0806) ? ARPhead4 : UDPhead4;
   
   reg [3:0] State;
   reg [3:0] nextState;
@@ -131,7 +148,7 @@ wire [31:0] UDPhead4  = {UDPSize,UDPcheckSum};
                if (HEAcount == 8'h1b) nextState <= DATA;               
                 else  nextState <= HEADER;
            DATA:
-               if (DATcount == Length-1) nextState <= CRC;               
+               if (DATcount == Reg_Length-1) nextState <= CRC;               
                 else  nextState <= DATA;
            CRC:
                if (CRCcount == 8'h05) nextState <= IDEL;               
@@ -149,10 +166,11 @@ wire [31:0] UDPhead4  = {UDPSize,UDPcheckSum};
   reg  [7:0] CRCin;
   reg        CRCen;
   reg        PKTen;
+  wire [31:0] CRCcalc;
  always @(posedge clk125 or negedge rstn)
     if (!rstn) begin
           ADDout <= {desMAC,16'h0000};   
-          HEAout <= ARPhead1;   
+          HEAout <= head1;   
           CRCout <= 32'h00000000;
           CRCin  <= 8'h00;
           CRCen  <= 1'b0;
@@ -161,14 +179,14 @@ wire [31:0] UDPhead4  = {UDPSize,UDPcheckSum};
     else case (State) 
 	       IDEL    : begin
                      ADDout <= {desMAC,16'h0000};   
-                     HEAout <= ARPhead1;   
+                     HEAout <= head1;   
                      CRCin  <= 8'h00;
                      CRCen  <= 1'b0;
 					   end
            PREAMBL : begin
+                     HEAout <= head1;   
                      if (PREcount == 8'h07) CRCin <= 8'hd5;
                       else CRCin <= 8'h55;
-                     //if (PREcount == 8'h01) PKTen  <= 1'b1;
                      PKTen  <= 1'b1;
 					   end
            ADDRESS : begin 
@@ -178,13 +196,14 @@ wire [31:0] UDPhead4  = {UDPSize,UDPcheckSum};
                      CRCen  <= 1'b1;
                        end       
            HEADER  : begin
-                     if (HEAcount == 8'h07) HEAout <= ARPhead2;  
-                      else if (HEAcount == 8'h0f) HEAout <= ARPhead3;           
-                      else if (HEAcount == 8'h17) HEAout <= {ARPhead4,32'h00000000};
+                     if (HEAcount == 8'h07) HEAout <= head2;  
+                      else if (HEAcount == 8'h0f) HEAout <= head3;           
+                      else if (HEAcount == 8'h17) HEAout <= {head4,32'h00000000};
                       else HEAout <= {HEAout[55:0],8'h00};  
                      CRCin <= HEAout[63:56];
                        end       
-           DATA    : CRCin <= 8'h00;      
+           DATA    : if ((ETHtype == 16'h0800)&&(PayLoadRd)) CRCin <= PayLoad;   
+                      else CRCin <= 8'h00;   
            CRC     : begin
                      if (CRCcount == 8'h01) begin
 		                 CRCout <= {CRCcalc[23:16],CRCcalc[31:24],8'h00,8'h00};   
@@ -199,7 +218,6 @@ wire [31:0] UDPhead4  = {UDPSize,UDPcheckSum};
            default : CRCin <= 8'h00;
          endcase   
 
-wire [31:0] CRCcalc;
 wire rstCRC = ((State == IDEL)||(State == PREAMBL)) ? 1'b1 : 1'b0;
 MyCRC MyCRC_inst(
   .clk       (clk125)   ,
@@ -224,7 +242,12 @@ always @(posedge clk125 or negedge rstn)
           OutTxen <= PKTen;  
 		        end
 		        
+always @(posedge clk125 or negedge rstn)
+   if (!rstn) PayLoadRd <= 1'b0;
+    else if (PayLoadEmpty)PayLoadRd <= 1'b0;
+    else if ((ETHtype == 16'h0800)&&(HEAcount == 8'h1a))PayLoadRd <= 1'b1;
 				
+//assign PayLoadRd = (nextState == DATA) ? 1'b1 : 1'b0;
         
 
 assign gmii_txd  = OutTx  ;  

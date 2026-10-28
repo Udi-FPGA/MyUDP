@@ -80,6 +80,9 @@ wire [7:0] gmii_txd ;
 wire       gmii_txen;  
 wire       gmii_txer;  
 
+wire [7:0] RXUDPdata  ;
+wire       RXUDPdataen;
+
 gmii_inter gmii_inter_inst(
   .reset       (!Rst_n),                 //input reset,               
 
@@ -147,11 +150,75 @@ MyUDP_rx MyUDP_rx_inst(
   .Length (Length ),
 
   .SendARP(SendARP),
-  .SendUDP(SendUDP)
-    );
+  .SendUDP(SendUDP),
 
-reg [7:0] DelSendARP;
-always @(posedge clk125m) DelSendARP <= {DelSendARP[6:0],SendARP}; 
+  .UDPdata  (RXUDPdata  ),
+  .UDPdataen(RXUDPdataen)
+    );
+wire       RXrd_en ;
+wire [7:0] RXdout  ;
+wire       RXfull  ;
+wire       RXempty ;
+
+reg       PayLoaden ;
+wire [7:0] PayLoaddata ;
+
+wire       TXfull  ;
+wire       TXempty ;
+wire       TXrd_en;
+wire [7:0] TXdout  ;
+
+//----------- Begin Cut here for INSTANTIATION Template ---// INST_TAG
+fifo_generator_0 fifo_generator_rx (
+  .clk(clk125m),      // input wire clk
+  .srst(!Rst_n),    // input wire srst
+  .din(RXUDPdata),      // input wire [7 : 0] din
+  .wr_en(RXUDPdataen),  // input wire wr_en
+  .rd_en(RXrd_en),  // input wire rd_en
+  .dout (RXdout),    // output wire [7 : 0] dout
+  .full (RXfull),    // output wire full
+  .empty(RXempty)  // output wire empty
+);
+
+assign RXrd_en = ~RXempty;
+  always @(posedge clk125m or negedge Rst_n)
+    if (!Rst_n) PayLoaden <= 1'b0;
+     else PayLoaden <= RXrd_en;
+assign PayLoaddata = RXdout;    
+//----------- Begin Cut here for INSTANTIATION Template ---// INST_TAG
+fifo_generator_0 fifo_generator_tx (
+  .clk(clk125m),      // input wire clk
+  .srst(!Rst_n),    // input wire srst
+  .din(PayLoaddata),      // input wire [7 : 0] din
+  .wr_en(PayLoaden),  // input wire wr_en
+  .rd_en(TXrd_en),  // input wire rd_en
+  .dout (TXdout),    // output wire [7 : 0] dout
+  .full (TXfull),    // output wire full
+  .empty(TXempty)  // output wire empty
+);
+
+
+//----------- Begin Cut here for INSTANTIATION Template ---// INST_TAG
+ila_1 ila_1_inst (
+	.clk(clk125m), // input wire clk
+
+
+	.probe0(SendARP), // input wire [0:0]  probe0  
+	.probe1(SendUDP), // input wire [0:0]  probe1 
+	.probe2(RXUDPdata), // input wire [7:0]  probe2 
+	.probe3(RXUDPdataen), // input wire [0:0]  probe3 
+	.probe4(RXrd_en), // input wire [0:0]  probe4 
+	.probe5(RXdout), // input wire [7:0]  probe5 
+	.probe6(RXfull), // input wire [0:0]  probe6 
+	.probe7(RXempty), // input wire [0:0]  probe7 
+	.probe8(PayLoaddata), // input wire [7:0]  probe8 
+	.probe9(PayLoaden), // input wire [0:0]  probe9 
+	.probe10(TXrd_en), // input wire [0:0]  probe10 
+	.probe11(TXdout), // input wire [7:0]  probe11 
+	.probe12(TXfull), // input wire [0:0]  probe12 
+	.probe13(TXempty) // input wire [0:0]  probe13
+);
+
 MyUDP_tx MyUDP_tx_inst(
   .clk125(clk125m),
   .rstn  (Rst_n),
@@ -172,8 +239,11 @@ MyUDP_tx MyUDP_tx_inst(
   .EthType(EthType),             
   .Length (Length ),
 
+  .PayLoadRd   (TXrd_en),
+  .PayLoadEmpty(TXempty), 
+  .PayLoad     (TXdout), 
+  
   .SendARP(SendARP),
-//  .SendARP(DelSendARP[7]),
   .SendUDP(SendUDP)  
     );
 

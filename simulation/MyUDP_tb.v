@@ -79,8 +79,10 @@ i=i+1;
 @(posedge clk125);
 end
 dv   = 1'b0;
-#1000;
 
+release MyUDP_top_inst.MyUDP_rx_inst.State;
+
+#1000;
 
 $readmemh("UDP_rx.hex",Mem);
 i=0;
@@ -94,8 +96,14 @@ i=i+1;
 @(posedge clk125);
 end
 dv   = 1'b0;
-#1000;
+#20;
+@(posedge clk125);
+//@(posedge clk125);
+//@(posedge clk125);
 
+//force MyUDP_top_inst.MyUDP_rx_inst.gmii_rxd  = 0;
+//force MyUDP_top_inst.MyUDP_rx_inst.gmii_rxdv
+force MyUDP_top_inst.MyUDP_rx_inst.State = 0;
 $readmemh("UDP_tx.hex",Mem);
 i=0;
 @(posedge clk125);
