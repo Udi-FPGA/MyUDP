@@ -79,6 +79,7 @@ i=i+1;
 @(posedge clk125);
 end
 dv   = 1'b0;
+#100;
 
 release MyUDP_top_inst.MyUDP_rx_inst.State;
 

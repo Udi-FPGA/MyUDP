@@ -5,7 +5,8 @@ import time
 FPGA_IP = "192.168.1.128"  # The IP from your Wireshark capture
 FPGA_PORT = 1234           # The port seen in your Wireshark capture
 PC_PORT = 5678            # <--- The specific port you want your PC to use
-MESSAGE = b"FPGA UDP Test 123" # The data to send (must be bytes)
+MESSAGE = b"FPGA UDP Test 12345" # The data to send (must be bytes)
+#MESSAGE = b"F" # The data to send (must be bytes)
 TIMEOUT = 2.0              # Seconds to wait before giving up
 
 def test_fpga():

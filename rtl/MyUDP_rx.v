@@ -73,7 +73,10 @@ module MyUDP_rx(
   reg [15:0] Reg_LengthIP ;             
   reg [15:0] Reg_LengthUDP ;             
   reg [15:0] Reg_Length ;             
-  
+  reg GetMyMAC;
+  reg GetMyIP;
+  reg GetMyport;
+
   reg [63:0] DataShift;
   always @(posedge clk125 or negedge rstn)
     if (!rstn) DataShift <= 64'h0000000000000000;
@@ -129,27 +132,35 @@ module MyUDP_rx(
           Reg_desMAC  <= 48'h000000000000;             
           Reg_srcMAC  <= 48'h000000000000;  
           Reg_EthType <= 16'h0000; 
-          Reg_desIP <= 31'h00000000;             
-          Reg_srcIP <= 31'h00000000;  
+          Reg_desIP   <= 31'h00000000;             
+          Reg_srcIP   <= 31'h00000000;  
           Reg_desPORT <= 16'h0000  ;             
           Reg_srcPORT <= 16'h0000  ;  
           Reg_Length  <= 16'h0000  ;             
+          GetMyMAC    <= 1'b0;
+          GetMyIP     <= 1'b0;
+          GetMyport   <= 1'b0;
              end
-//     else if (State == IDEL) begin 
+     else if (State == IDEL) begin 
 //          Reg_desMAC  <= 48'h000000000000;             
 //          Reg_srcMAC  <= 48'h000000000000;  
-//          Reg_EthType <= 16'h0000; 
+          Reg_EthType <= 16'h0000; 
 //          Reg_desIP <= 31'h00000000;             
 //          Reg_srcIP <= 31'h00000000;  
 //          Reg_desPORT <= 16'h0000  ;             
 //          Reg_srcPORT <= 16'h0000  ;  
-//          Reg_Length  <= 16'h0000  ;             
-//             end
+          Reg_Length  <= 16'h0000  ;             
+          GetMyMAC    <= 1'b0;
+          GetMyIP     <= 1'b0;
+          GetMyport   <= 1'b0;
+             end
      else if (ADDcount==8'h06) Reg_desMAC  <= DataShift[47:0];
+     else if ((ADDcount==8'h07)&&((Reg_desMAC == local_mac)||(Reg_desMAC == 48'hFFFFFFFFFFFF))) GetMyMAC  <= 1'b1;
      else if (ADDcount==8'h0c) Reg_srcMAC  <= DataShift[47:0];
      else if (ADDcount==8'h0e) Reg_EthType <= DataShift[15:0];
 	 else if (Reg_EthType == 16'h0806) begin 
-             if (HEAcount == 8'h1c) Reg_desIP <= DataShift[31:0];             
+             if (HEAcount == 8'h1c) Reg_desIP <= DataShift[31:0];  
+             if (Reg_desIP == local_ip) GetMyIP  <= 1'b1;           
              if (HEAcount == 8'h12) Reg_srcIP <= DataShift[31:0]; 
              Reg_Length <= 16'h0012;             
                        end
@@ -162,8 +173,10 @@ module MyUDP_rx(
                                           end        
               else if (HEAcount == 8'h10) Reg_srcIP     <= DataShift[31:0];             
               else if (HEAcount == 8'h14) Reg_desIP     <= DataShift[31:0]; 
+              else if ((HEAcount == 8'h15)&&(Reg_desIP == local_ip)) GetMyIP  <= 1'b1;
               else if (HEAcount == 8'h16) Reg_srcPORT   <= DataShift[15:0];             
               else if (HEAcount == 8'h18) Reg_desPORT   <= DataShift[15:0];  
+              else if ((HEAcount == 8'h19)&&(Reg_desPORT == local_port)) GetMyport  <= 1'b1;
               else if (HEAcount == 8'h1a) Reg_UDPlength <= DataShift[15:0];  
               else if (HEAcount == 8'h1b) Reg_LengthUDP <= Reg_UDPlength-8;
                        end        
@@ -185,25 +198,30 @@ reg [31:0] MyCRC;
     if (!rstn) MyCRC <= 32'h00000000;
      else if (DATcount == Reg_Length) MyCRC <= {CRCcalc[7:0],CRCcalc[15:8],CRCcalc[23:16],CRCcalc[31:24]};	
 	
-reg GetMyMAC;
-reg GetMyIP;
+//reg GetMyMAC;
+//reg GetMyIP;
+//reg GetMyport;
 reg CRC_ok;
+// always @(posedge clk125 or negedge rstn)
+//    if (!rstn) begin 
+//          GetMyMAC  <= 1'b0;
+//          GetMyIP   <= 1'b0;
+//          GetMyport <= 1'b0;
+//		        end
+//     else if ((State == PREAMBL)||(State == PREAMBL)) begin 
+//          GetMyMAC  <= 1'b0;
+//          GetMyIP   <= 1'b0;
+//          GetMyport <= 1'b0;
+//		        end
+//     else if ((State == HEADER)||(State == DATA)||(State == CRC)) begin 
+//          if (Reg_desIP == local_ip) GetMyIP  <= 1'b1;
+//          if ((Reg_desMAC == local_mac)||(Reg_desMAC == 48'hFFFFFFFFFFFF)) GetMyMAC  <= 1'b1;
+//          if (Reg_desPORT == local_port) GetMyport  <= 1'b1;
+//                end	                            
  always @(posedge clk125 or negedge rstn)
-    if (!rstn) begin 
-          GetMyMAC <= 1'b0;
-          GetMyIP  <= 1'b0;
-          CRC_ok   <= 1'b0;
-		        end
-     else if (State == IDEL) begin 
-          GetMyMAC <= 1'b0;
-          GetMyIP  <= 1'b0;
-          CRC_ok   <= 1'b0;
-		        end
+    if (!rstn) CRC_ok    <= 1'b0;
+     else if (State != CRC) CRC_ok    <= 1'b0; 
      else if ((CRCcount == 8'h04)&&(DataShift[31:0] == MyCRC)) CRC_ok <= 1'b1; 
-     else if (State == HEADER) begin 
-          if (Reg_desIP == local_ip) GetMyIP  <= 1'b1;
-          if ((Reg_desMAC == local_mac)||(Reg_desMAC == 48'hFFFFFFFFFFFF)) GetMyMAC  <= 1'b1;
-                end	                            
 
 assign desMAC  = Reg_desMAC  ;            
 assign srcMAC  = Reg_srcMAC  ; 
@@ -215,7 +233,7 @@ assign EthType = Reg_EthType ;
 assign Length  = Reg_LengthIP; // Reg_Length  ;
 
 assign SendARP = (GetMyIP && GetMyMAC && CRC_ok && (Reg_EthType == 16'h0806)) ? 1'b1 : 1'b0; 
-assign SendUDP = (GetMyIP && GetMyMAC && CRC_ok && (Reg_EthType == 16'h0800)) ? 1'b1 : 1'b0; 
+assign SendUDP = (GetMyIP && GetMyMAC && GetMyport && CRC_ok && (Reg_EthType == 16'h0800)) ? 1'b1 : 1'b0; 
 reg [15:0] UDPdatacount;
  always @(posedge clk125 or negedge rstn)
     if (!rstn) begin 
@@ -234,4 +252,17 @@ reg [15:0] UDPdatacount;
           UDPdataen    <= 1'b0 ;
                 end
 
+//----------- Begin Cut here for INSTANTIATION Template ---// INST_TAG
+ila_2 ila_2_inst (
+	.clk(clk125), // input wire clk
+
+	.probe0(gmii_rxd), // input wire [3:0]  probe0  
+	.probe1(gmii_rxdv), // input wire [0:0]  probe1 
+	.probe2(SendARP), // input wire [0:0]  probe2 
+	.probe3(SendUDP), // input wire [0:0]  probe3 
+	.probe4(GetMyMAC ), // input wire [0:0]  probe4 
+	.probe5(GetMyIP  ), // input wire [0:0]  probe5 
+	.probe6(GetMyport), // input wire [0:0]  probe6 
+	.probe7(CRC_ok) // input wire [0:0]  probe7
+);
 endmodule
